@@ -15,6 +15,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { useCart, type CartLine } from "@/components/cart-context"
+import { appendOrderToSheet, type OrderData } from "@/lib/google-sheets"
 import { OrderSuccess } from "@/components/order-success"
 import { QrModal, type WalletKind } from "@/components/qr-modal"
 import { formatPrice } from "@/lib/menu-data"
@@ -115,7 +116,9 @@ export function CheckoutFlow() {
     )
   }
 
-  const onSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const [submitting, setSubmitting] = useState(false)
+
+  const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
 
     if (!name.trim() || !phone.trim()) {
@@ -126,6 +129,8 @@ export function CheckoutFlow() {
       toast.error("Ingresa la dirección de entrega")
       return
     }
+
+    setSubmitting(true)
 
     const orderNumber = generateOrderNumber()
     const snapshot: Confirmed = {
@@ -140,6 +145,37 @@ export function CheckoutFlow() {
       deliveryFee,
     }
 
+    // Format products for Google Sheets
+    const productsString = lines
+      .map((l) => `${l.dish.name} x${l.quantity}`)
+      .join(", ")
+
+    // Prepare order data for Google Sheets
+    const orderData: OrderData = {
+      orderId: orderNumber,
+      date: new Date().toLocaleString("es-PE", {
+        dateStyle: "short",
+        timeStyle: "short",
+      }),
+      customer: name.trim(),
+      phone: phone.trim(),
+      address: deliveryType === "delivery" ? address.trim() : "Recojo en tienda",
+      products: productsString,
+      paymentMethod: payment === "yape" ? "Yape" : payment === "plin" ? "Plin" : "Efectivo",
+      delivery: deliveryType === "delivery" 
+        ? `Delivery (${deliveryZone === "4" ? "4ta" : deliveryZone === "3" ? "3ra" : deliveryZone === "2" ? "2da" : "1ra"} Zona)` 
+        : "Recojo en tienda",
+      total,
+    }
+
+    // Save to Google Sheets
+    const result = await appendOrderToSheet(orderData)
+    
+    if (!result.success) {
+      console.error("Error saving to sheets:", result.error)
+    }
+
+    setSubmitting(false)
     setConfirmed(snapshot)
     clear()
     toast.success(`Pedido #${orderNumber} confirmado`)
@@ -428,10 +464,20 @@ export function CheckoutFlow() {
 
               <button
                 type="submit"
-                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full bg-brand-red px-5 py-3.5 text-sm font-semibold text-white shadow-md transition-colors hover:bg-brand-red-dark"
+                disabled={submitting}
+                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full bg-brand-red px-5 py-3.5 text-sm font-semibold text-white shadow-md transition-colors hover:bg-brand-red-dark disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <CheckCircle2 className="h-5 w-5" />
-                Confirmar pedido
+                {submitting ? (
+                  <>
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    Procesando...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-5 w-5" />
+                    Confirmar pedido
+                  </>
+                )}
               </button>
 
               <p className="mt-3 text-center text-xs text-muted-foreground">
