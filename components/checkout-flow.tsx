@@ -71,6 +71,7 @@ export function CheckoutFlow() {
   const [notes, setNotes] = useState("")
 
   const [confirmed, setConfirmed] = useState<Confirmed | null>(null)
+  const [submitting, setSubmitting] = useState(false)
 
   const deliveryFee = deliveryType === "delivery" ? DELIVERY_ZONE_FEES[deliveryZone] : 0
   const total = useMemo(() => {
@@ -115,8 +116,6 @@ export function CheckoutFlow() {
       </section>
     )
   }
-
-  const [submitting, setSubmitting] = useState(false)
 
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
